@@ -28,6 +28,8 @@ var vinfos []models.VulnInfo
 var currentVinfo int
 var currentDetailLimitY int
 var currentChangelogLimitY int
+var licenseViewMode bool
+var licenseRightLimitY int
 
 // RunTui execute main logic
 func RunTui(results models.ScanResults) subcommands.ExitStatus {
@@ -46,6 +48,8 @@ func RunTui(results models.ScanResults) subcommands.ExitStatus {
 		return subcommands.ExitFailure
 	}
 	defer g.Close()
+
+	licenseViewMode = config.Conf.License
 
 	g.SetLayout(layout)
 	if err := keybindings(g); err != nil {
@@ -153,6 +157,22 @@ func keybindings(g *gocui.Gui) (err error) {
 	//  errs = append(errs, g.SetKeybinding("msg", gocui.KeyEnter, gocui.ModNone, delMsg))
 	//  errs = append(errs, g.SetKeybinding("detail", gocui.KeyEnter, gocui.ModNone, showMsg))
 
+	// licenseLeft
+	errs = append(errs, g.SetKeybinding("licenseLeft", gocui.KeyTab, gocui.ModNone, licenseNextView))
+	errs = append(errs, g.SetKeybinding("licenseLeft", gocui.KeyArrowDown, gocui.ModNone, cursorDown))
+	errs = append(errs, g.SetKeybinding("licenseLeft", gocui.KeyArrowUp, gocui.ModNone, cursorUp))
+	errs = append(errs, g.SetKeybinding("licenseLeft", gocui.KeyPgdn, gocui.ModNone, cursorPageDown))
+	errs = append(errs, g.SetKeybinding("licenseLeft", gocui.KeyPgup, gocui.ModNone, cursorPageUp))
+	errs = append(errs, g.SetKeybinding("licenseLeft", gocui.KeyEnter, gocui.ModNone, licenseNextView))
+
+	// licenseRight
+	errs = append(errs, g.SetKeybinding("licenseRight", gocui.KeyTab, gocui.ModNone, licenseNextView))
+	errs = append(errs, g.SetKeybinding("licenseRight", gocui.KeyArrowDown, gocui.ModNone, cursorDown))
+	errs = append(errs, g.SetKeybinding("licenseRight", gocui.KeyArrowUp, gocui.ModNone, cursorUp))
+	errs = append(errs, g.SetKeybinding("licenseRight", gocui.KeyPgdn, gocui.ModNone, cursorPageDown))
+	errs = append(errs, g.SetKeybinding("licenseRight", gocui.KeyPgup, gocui.ModNone, cursorPageUp))
+	errs = append(errs, g.SetKeybinding("licenseRight", gocui.KeyEnter, gocui.ModNone, licenseNextView))
+
 	errs = append(errs, g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit))
 	//  errs = append(errs, g.SetKeybinding("side", gocui.KeyEnter, gocui.ModNone, getLine))
 	//  errs = append(errs, g.SetKeybinding("msg", gocui.KeyEnter, gocui.ModNone, delMsg))
@@ -209,12 +229,17 @@ func previousView(g *gocui.Gui, v *gocui.View) error {
 
 func movable(v *gocui.View, nextY int) (ok bool, yLimit int) {
 	switch v.Name() {
-	case "side":
+	case "side", "licenseLeft":
 		yLimit = len(scanResults) - 1
 		if yLimit < nextY {
 			return false, yLimit
 		}
 		return true, yLimit
+	case "licenseRight":
+		if licenseRightLimitY < nextY {
+			return false, licenseRightLimitY
+		}
+		return true, licenseRightLimitY
 	case "summary":
 		yLimit = len(currentScanResult.ScannedCves) - 1
 		if yLimit < nextY {
@@ -241,7 +266,7 @@ func pageUpDownJumpCount(v *gocui.View) int {
 	switch v.Name() {
 	case "side", "summary":
 		jump = 8
-	case "detail", "changelog":
+	case "detail", "changelog", "licenseRight":
 		jump = 30
 	default:
 		jump = 8
@@ -261,6 +286,10 @@ func onMovingCursorRedrawView(g *gocui.Gui, v *gocui.View) error {
 		}
 	case "side":
 		if err := changeHost(g, v); err != nil {
+			return err
+		}
+	case "licenseLeft":
+		if err := licenseChangeHost(g, v); err != nil {
 			return err
 		}
 	}
@@ -517,6 +546,12 @@ func quit(_ *gocui.Gui, _ *gocui.View) error {
 }
 
 func layout(g *gocui.Gui) error {
+	if licenseViewMode {
+		if err := setServerListLayout(g); err != nil {
+			return err
+		}
+		return setLicenseInfoLayout(g)
+	}
 	if err := setSideLayout(g); err != nil {
 		return err
 	}
@@ -1078,3 +1113,143 @@ References
 {{end}}
 
 `
+
+func setServerListLayout(g *gocui.Gui) error {
+	_, maxY := g.Size()
+	if v, err := g.SetView("licenseLeft", -1, -1, 40, maxY); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Highlight = true
+
+		for _, result := range scanResults {
+			fmt.Fprintln(v, result.ServerInfoTui())
+		}
+		if len(scanResults) == 0 {
+			return xerrors.New("No scan results")
+		}
+		currentScanResult = scanResults[0]
+		if err := g.SetCurrentView("licenseLeft"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func setLicenseInfoLayout(g *gocui.Gui) error {
+	maxX, maxY := g.Size()
+	if v, err := g.SetView("licenseRight", 40, -1, maxX, maxY); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+
+		v.Highlight = true
+
+		lines := licenseLines(currentScanResult, maxX-40)
+		fmt.Fprint(v, lines)
+	}
+	return nil
+}
+
+func licenseLines(r models.ScanResult, xSize int) string {
+	ltable := uitable.New()
+
+	if len(r.Errors) != 0 {
+		return "Error: Scan with --debug to view the details"
+	}
+
+	indexFormat := ""
+	indexHeader := ""
+	if len(r.Packages) < 10 {
+		indexFormat = "[%1d]"
+		indexHeader = "####"
+	} else if len(r.Packages) < 100 {
+		indexFormat = "[%2d]"
+		indexHeader = "#####"
+	} else if len(r.Packages) < 1000 {
+		indexFormat = "[%3d]"
+	} else {
+		indexFormat = "[%4d]"
+		indexHeader = "######"
+	}
+
+	licenseRightLimitY = len(r.Packages)
+
+	headers := []string{indexHeader, "PACKAGE", "LICENSE"}
+	iheaders := make([]interface{}, len(headers))
+	for j := range headers {
+		iheaders[j] = headers[j]
+	}
+	ltable.AddRow(iheaders...)
+
+	maxNameLength := 0
+	for i, pkg := range r.Packages.ToSortedSlice() {
+		cols := []string{
+			fmt.Sprintf(indexFormat, i+1),
+			pkg.Name,
+			pkg.License,
+		}
+		if len(pkg.Name) > maxNameLength {
+			maxNameLength = len(pkg.Name)
+		}
+
+		icols := make([]interface{}, len(cols))
+		for j := range cols {
+			icols[j] = cols[j]
+		}
+		ltable.AddRow(icols...)
+	}
+
+	remainingSpace := xSize - maxNameLength - len(indexHeader) - 2
+
+	if remainingSpace < 10 {
+		ltable.MaxColWidth = uint(xSize-len(indexHeader)-2) / 2
+	} else {
+		ltable.MaxColWidth = uint(remainingSpace)
+	}
+	ltable.Wrap = false
+
+	return ltable.String()
+}
+
+func licenseNextView(g *gocui.Gui, v *gocui.View) error {
+	var err error
+
+	if v == nil {
+		err = g.SetCurrentView("licenseLeft")
+		return err
+	}
+
+	switch v.Name() {
+	case "licenseLeft":
+		err = g.SetCurrentView("licenseRight")
+	case "licenseRight":
+		err = g.SetCurrentView("licenseLeft")
+	default:
+		err = g.SetCurrentView("licenseRight")
+	}
+	return err
+}
+
+func licenseChangeHost(g *gocui.Gui, v *gocui.View) error {
+
+	if err := g.DeleteView("licenseRight"); err != nil {
+		return err
+	}
+
+	_, cy := v.Cursor()
+	l, err := v.Line(cy)
+	if err != nil {
+		return err
+	}
+	serverName := strings.TrimSpace(l)
+
+	for _, r := range scanResults {
+		if serverName == strings.TrimSpace(r.ServerInfoTui()) {
+			currentScanResult = r
+			break
+		}
+	}
+
+	return setLicenseInfoLayout(g)
+}

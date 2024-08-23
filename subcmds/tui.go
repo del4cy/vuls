@@ -45,6 +45,7 @@ func (*TuiCmd) Usage() string {
 		[-ignore-unscored-cves]
 		[-ignore-unfixed]
 		[-results-dir=/path/to/results]
+		[-license-only]
 		[-log-to-file]
 		[-log-dir=/path/to/log]
 		[-debug]
@@ -64,6 +65,7 @@ func (p *TuiCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&config.Conf.Debug, "debug", false, "debug mode")
 	f.BoolVar(&config.Conf.Quiet, "quiet", false, "Quiet mode. No output on stdout")
 	f.BoolVar(&config.Conf.NoProgress, "no-progress", false, "Suppress progress bar")
+	f.BoolVar(&config.Conf.License, "license-only", false, "View licenses of installed packages")
 
 	defaultLogDir := logging.GetDefaultLogDir()
 	f.StringVar(&config.Conf.LogDir, "log-dir", defaultLogDir, "/path/to/log")
