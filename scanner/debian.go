@@ -1337,3 +1337,65 @@ func (o *debian) parseGetPkgName(stdout string) (pkgNames []string) {
 	}
 	return pkgNames
 }
+
+func (o *debian) collectLicenseInformation() (err error) {
+	o.log.Warn("Collecting license information of packages on a Debian based system. This might take a while.")
+	queryLicense := `dpkg-query -W -f="\${binary:Package}\n"`
+	r := o.exec(queryLicense, noSudo)
+	if !r.isSuccess() {
+		return xerrors.Errorf("Failed to SSH: %s", r)
+	}
+
+	packs := models.Packages{}
+
+	scanner := bufio.NewScanner(strings.NewReader(r.Stdout))
+	for scanner.Scan() {
+		line := scanner.Text()
+		name := strings.TrimSpace(line)
+		name = strings.Split(name, ":")[0]
+
+		license := ""
+
+		catCopyright := fmt.Sprintf("cat /usr/share/doc/%s/copyright", name)
+		r := o.exec(catCopyright, noSudo)
+
+		if r.isSuccess() {
+			license = strings.Join(o.getLicenses(r.Stdout), ", ")
+		}
+
+		packs[name] = models.Package{
+			Name:    name,
+			License: license,
+		}
+	}
+
+	o.Packages = packs
+
+	return nil
+}
+
+// Read machine-readable copyright file and extract licenses.
+// Specification: https://dep-team.pages.debian.net/deps/dep5/
+func (o *debian) getLicenses(contents string) []string {
+	licenses := []string{}
+	lines := strings.Split(contents, "\n")
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "License:") {
+			columns := strings.Split(line, ":")
+
+			// First line should contain short license name.
+			license := strings.TrimSpace(columns[1])
+
+			if strings.TrimSpace(license) == "" {
+				continue
+			}
+
+			if !slices.Contains(licenses, license) {
+				licenses = append(licenses, license)
+			}
+		}
+	}
+
+	return licenses
+}

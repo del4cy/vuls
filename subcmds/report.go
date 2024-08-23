@@ -60,6 +60,7 @@ func (*ReportCmd) Usage() string {
 		[-lang=en|ja]
 		[-config=/path/to/config.toml]
 		[-results-dir=/path/to/results]
+		[-license-only]
 		[-log-to-file]
 		[-log-dir=/path/to/log]
 		[-refresh-cve]
@@ -110,6 +111,7 @@ func (p *ReportCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&config.Conf.DebugSQL, "debug-sql", false, "SQL debug mode")
 	f.BoolVar(&config.Conf.Quiet, "quiet", false, "Quiet mode. No output on stdout")
 	f.BoolVar(&config.Conf.NoProgress, "no-progress", false, "Suppress progress bar")
+	f.BoolVar(&config.Conf.License, "license-only", false, "Report only license information of installed packages.")
 
 	wd, _ := os.Getwd()
 	defaultConfPath := filepath.Join(wd, "config.toml")
@@ -271,6 +273,15 @@ func (p *ReportCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}
 	for _, r := range res {
 		logging.Log.Debugf("%s: %s",
 			r.ServerInfo(), pp.Sprintf("%s", config.Conf.Servers[r.ServerName]))
+	}
+
+	if config.Conf.License {
+		// Report the licenses, then exit.
+		if err := reporter.WriteLicenseReport(res); err != nil {
+			logging.Log.Error(err)
+			return subcommands.ExitFailure
+		}
+		return subcommands.ExitSuccess
 	}
 
 	if res, err = detector.Detect(res, dir); err != nil {

@@ -62,6 +62,8 @@ type osTypeInterface interface {
 
 	parseInstalledPackages(string) (models.Packages, models.SrcPackages, error)
 
+	collectLicenseInformation() error
+
 	runningContainers() ([]config.Container, error)
 	exitedContainers() ([]config.Container, error)
 	allContainers() ([]config.Container, error)
@@ -915,7 +917,13 @@ func (s Scanner) execScan() error {
 		return err
 	}
 
-	results, err := s.getScanResults(scannedAt)
+	var results models.ScanResults
+	if config.Conf.License {
+		results, err = s.getLicenseInformation(scannedAt)
+	} else {
+		results, err = s.getScanResults(scannedAt)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -1000,6 +1008,30 @@ func (s Scanner) getScanResults(scannedAt time.Time) (results models.ScanResults
 		r.ScannedBy = hostname
 		r.ScannedIPv4Addrs = ipv4s
 		r.ScannedIPv6Addrs = ipv6s
+		r.Config.Scan = config.Conf
+		results = append(results, r)
+
+		if 0 < len(r.Warnings) {
+			logging.Log.Warnf("Some warnings occurred during scanning on %s. Please fix the warnings to get a useful information. Execute configtest subcommand before scanning to know the cause of the warnings. warnings: %v",
+				r.ServerName, r.Warnings)
+		}
+	}
+	return results, nil
+}
+
+func (s Scanner) getLicenseInformation(scannedAt time.Time) (results models.ScanResults, err error) {
+	parallelExec(func(o osTypeInterface) (err error) {
+		if err = o.collectLicenseInformation(); err != nil {
+			return err
+		}
+		return nil
+	}, s.ScanTimeoutSec)
+
+	for _, s := range append(servers, errServers...) {
+		r := s.convertToModel()
+		r.ScannedAt = scannedAt
+		r.ScannedVersion = config.Version
+		r.ScannedRevision = config.Revision
 		r.Config.Scan = config.Conf
 		results = append(results, r)
 

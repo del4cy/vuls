@@ -188,3 +188,35 @@ func (o *alpine) parseApkVersion(stdout string) (models.Packages, error) {
 	}
 	return packs, nil
 }
+
+func (o *alpine) collectLicenseInformation() (err error) {
+	o.log.Info("Collecting license information of packages.")
+	cmd := util.PrependProxyEnv("apk list --installed")
+	r := o.exec(cmd, noSudo)
+	if !r.isSuccess() {
+		return xerrors.Errorf("Failed to SSH: %s", r)
+	}
+
+	packs := models.Packages{}
+	scanner := bufio.NewScanner(strings.NewReader(r.Stdout))
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		nameStart := strings.Index(line, "{") + 1
+		nameEnd := strings.Index(line, "}")
+		name := line[nameStart:nameEnd]
+
+		licenseStart := strings.Index(line, "(") + 1
+		licenseEnd := strings.Index(line, ")")
+		license := line[licenseStart:licenseEnd]
+
+		packs[name] = models.Package{
+			Name:    name,
+			License: license,
+		}
+	}
+
+	o.Packages = packs
+
+	return nil
+}

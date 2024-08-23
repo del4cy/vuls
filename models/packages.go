@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -84,6 +85,7 @@ type Package struct {
 	NewVersion       string               `json:"newVersion"`
 	NewRelease       string               `json:"newRelease"`
 	Arch             string               `json:"arch"`
+	License          string               `json:"license,omitempty"`
 	Repository       string               `json:"repository"`
 	ModularityLabel  string               `json:"modularitylabel"`
 	Changelog        *Changelog           `json:"changelog,omitempty"`
@@ -455,4 +457,19 @@ func IsKernelSourcePackage(family, name string) bool {
 	default:
 		return false
 	}
+}
+
+// ToSortedSlice returns slice of Packages that is sorted by Name
+func (ps Packages) ToSortedSlice() []Package {
+	sorted := []Package{}
+
+	for _, p := range ps {
+		sorted = append(sorted, p)
+	}
+
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Name < sorted[j].Name
+	})
+
+	return sorted
 }

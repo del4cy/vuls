@@ -35,6 +35,8 @@ type Config struct {
 	Default ServerInfo            `json:"default,omitempty"`
 	Servers map[string]ServerInfo `json:"servers,omitempty"`
 
+	License bool `json:"license,omitempty"`
+
 	ScanOpts
 
 	// report

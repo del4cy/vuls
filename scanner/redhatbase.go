@@ -958,3 +958,47 @@ func (o *redhatBase) rpmQf() string {
 		return newer
 	}
 }
+
+func (o *redhatBase) collectLicenseInformation() (err error) {
+	o.log.Info("Collecting license information of packages.")
+	queryLicense := `rpm -qa --queryformat "%{NAME} %{LICENSE}\n"`
+	var r execResult
+	switch o.getDistro().Family {
+	case constant.Amazon:
+		switch strings.Fields(o.getDistro().Release)[0] {
+		case "2":
+			if o.exec("rpm -q yum-utils", noSudo).isSuccess() {
+				r = o.exec("repoquery --all --pkgnarrow=installed --qf='%{NAME} %{LICENSE}'", o.sudo.repoquery())
+			} else {
+				r = o.exec(queryLicense, noSudo)
+			}
+		default:
+			r = o.exec(queryLicense, noSudo)
+		}
+	default:
+		r = o.exec(queryLicense, noSudo)
+	}
+
+	if !r.isSuccess() {
+		return xerrors.Errorf("Scan packages failed: %s", r)
+	}
+
+	packs := models.Packages{}
+
+	scanner := bufio.NewScanner(strings.NewReader(r.Stdout))
+	for scanner.Scan() {
+		line := scanner.Text()
+		ss := strings.Fields(line)
+		name := ss[0]
+		license := strings.Join(ss[1:], " ")
+
+		packs[name] = models.Package{
+			Name:    name,
+			License: license,
+		}
+	}
+
+	o.Packages = packs
+
+	return nil
+}

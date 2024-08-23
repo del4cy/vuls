@@ -343,3 +343,74 @@ func (o *bsd) parseBlock(block string) (packName string, cveIDs []string, vulnID
 	}
 	return
 }
+
+func (o *bsd) collectLicenseInformation() (err error) {
+	o.log.Warn("Collecting license information of packages on a BSD system. This might take a while.")
+	r := o.exec("pkg info", noSudo)
+	if !r.isSuccess() {
+		return xerrors.Errorf("Failed to SSH: %s", r)
+	}
+
+	packs := models.Packages{}
+	lines := strings.Split(r.Stdout, "\n")
+	for _, l := range lines {
+		fields := strings.Fields(l)
+		if len(fields) < 2 {
+			continue
+		}
+
+		packVer := fields[0]
+		splitted := strings.Split(packVer, "-")
+		name := strings.Join(splitted[:len(splitted)-1], "-")
+		license := ""
+
+		catCopyright := fmt.Sprintf("cat /usr/local/share/licenses/%s/LICENSE", packVer)
+		r := o.exec(catCopyright, noSudo)
+
+		if r.isSuccess() {
+			license = strings.Join(o.getLicenses(r.Stdout), ", ")
+		}
+
+		packs[name] = models.Package{
+			Name:    name,
+			License: license,
+		}
+	}
+
+	o.Packages = packs
+
+	return nil
+}
+
+func (o *bsd) getLicenses(contents string) []string {
+	licenses := []string{}
+	lines := strings.Split(contents, "\n")
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		// This package has a single license: GPLv3 (GNU General Public License version 3).
+		if strings.HasPrefix(line, "This package has a single license:") {
+			splitted := strings.Split(line, ":")
+			fields := strings.Fields(splitted[1])
+			licenses = append(licenses, fields[0])
+			return licenses
+		}
+
+		// This package has multiple licenses (all of):
+		// - LGPL21+ (GNU Lesser General Public License version 2.1 (or later))
+		// - GPLv3+ (GNU General Public License version 3 (or later))
+		if strings.HasPrefix(line, "This package has multiple licenses (all of):") {
+			continue
+		}
+
+		ss := strings.Fields(line)
+		if len(ss) > 1 {
+			licenses = append(licenses, ss[1])
+		}
+	}
+
+	return licenses
+}

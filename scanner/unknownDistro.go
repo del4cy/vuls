@@ -34,3 +34,7 @@ func (o *unknown) scanPackages() error {
 func (o *unknown) parseInstalledPackages(string) (models.Packages, models.SrcPackages, error) {
 	return nil, nil, nil
 }
+
+func (o *unknown) collectLicenseInformation() (err error) {
+	return nil
+}

@@ -38,6 +38,7 @@ func (*ScanCmd) Usage() string {
 	scan
 		[-config=/path/to/config.toml]
 		[-results-dir=/path/to/results]
+		[-license-only]
 		[-log-to-file]
 		[-log-dir=/path/to/log]
 		[-cachedb-path=/path/to/cache.db]
@@ -65,6 +66,8 @@ func (p *ScanCmd) SetFlags(f *flag.FlagSet) {
 
 	defaultResultsDir := filepath.Join(wd, "results")
 	f.StringVar(&config.Conf.ResultsDir, "results-dir", defaultResultsDir, "/path/to/results")
+
+	f.BoolVar(&config.Conf.License, "license-only", false, "Collect only license information of packages.")
 
 	defaultLogDir := logging.GetDefaultLogDir()
 	f.StringVar(&config.Conf.LogDir, "log-dir", defaultLogDir, "/path/to/log")
