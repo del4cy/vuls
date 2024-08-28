@@ -23,6 +23,7 @@ func main() {
 	subcommands.Register(&commands.ReportCmd{}, "report")
 	subcommands.Register(&commands.ConfigtestCmd{}, "configtest")
 	subcommands.Register(&commands.ServerCmd{}, "server")
+	subcommands.Register(&commands.UpdateCmd{}, "update")
 
 	var v = flag.Bool("v", false, "Show version")
 

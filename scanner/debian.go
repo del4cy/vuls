@@ -1337,3 +1337,26 @@ func (o *debian) parseGetPkgName(stdout string) (pkgNames []string) {
 	}
 	return pkgNames
 }
+
+func (o *debian) updatePackages(vulnPkgs []string) error {
+	if len(vulnPkgs) == 0 {
+		return nil
+	}
+
+	logging.Log.Infof("Packages to update: %s", strings.Join(vulnPkgs, " "))
+
+	cmd := util.PrependProxyEnv("apt update")
+	r := o.exec(cmd, sudo)
+	if !r.isSuccess() {
+		return xerrors.Errorf("Failed to SSH: %s", r)
+	}
+
+	upgradeCommand := fmt.Sprintf("apt upgrade %s", strings.Join(vulnPkgs, " "))
+	cmd = util.PrependProxyEnv(upgradeCommand)
+	r = o.exec(cmd, sudo)
+	if !r.isSuccess() {
+		return xerrors.Errorf("Failed to SSH: %s", r)
+	}
+
+	return nil
+}

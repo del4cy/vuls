@@ -4819,3 +4819,7 @@ func (w *windows) detectRunningOnAws() (bool, string, error) {
 
 	return false, "", xerrors.Errorf("Failed to Invoke-WebRequest or curl.exe to AWS instance metadata on %s. container: %s", w.ServerInfo.ServerName, w.ServerInfo.Container.Name)
 }
+
+func (w *windows) updatePackages([]string) error {
+	return nil
+}

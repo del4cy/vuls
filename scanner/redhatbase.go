@@ -958,3 +958,20 @@ func (o *redhatBase) rpmQf() string {
 		return newer
 	}
 }
+
+func (o *redhatBase) updatePackages(vulnPkgs []string) error {
+	if len(vulnPkgs) == 0 {
+		return nil
+	}
+
+	logging.Log.Infof("Packages to update: %s", strings.Join(vulnPkgs, " "))
+
+	updateCommand := fmt.Sprintf("rpm -U %s", strings.Join(vulnPkgs, " "))
+	cmd := util.PrependProxyEnv(updateCommand)
+	r := o.exec(cmd, sudo)
+	if !r.isSuccess() {
+		return xerrors.Errorf("Failed to SSH: %s", r)
+	}
+
+	return nil
+}

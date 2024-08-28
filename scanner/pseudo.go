@@ -67,3 +67,7 @@ func (o *pseudo) detectPlatform() {
 	o.setPlatform(models.Platform{Name: "other"})
 	return
 }
+
+func (o *pseudo) updatePackages([]string) error {
+	return nil
+}

@@ -69,6 +69,8 @@ type osTypeInterface interface {
 	setLogger(logging.Logger)
 	getErrs() []error
 	setErrs([]error)
+
+	updatePackages([]string) error
 }
 
 // Scanner has functions for scan
@@ -82,8 +84,8 @@ type Scanner struct {
 	LogDir         string
 	Quiet          bool
 	DetectIPS      bool
-
-	Targets map[string]config.ServerInfo
+	Update         bool
+	Targets        map[string]config.ServerInfo
 }
 
 // Scan execute scan
@@ -1009,4 +1011,28 @@ func (s Scanner) getScanResults(scannedAt time.Time) (results models.ScanResults
 		}
 	}
 	return results, nil
+}
+
+func (s Scanner) UpdatePackages() error {
+	logging.Log.Info("Detecting Server/Container OS... ")
+	if err := s.initServers(); err != nil {
+		return xerrors.Errorf("Failed to init servers. err: %w", err)
+	}
+
+	logging.Log.Info("Detecting Platforms... ")
+	s.detectPlatform()
+
+	if (len(servers) + len(errServers)) == 0 {
+		return xerrors.New("No server defined. Check the configuration")
+	}
+
+	parallelExec(func(o osTypeInterface) (err error) {
+		vulnPkgs := s.Targets[o.getServerInfo().BaseName].Optional["vulnPkgs"].([]string)
+		if err = o.updatePackages(vulnPkgs); err != nil {
+			return xerrors.Errorf("Failed to update packages: %w", err)
+		}
+		return nil
+	}, s.ScanTimeoutSec)
+
+	return nil
 }

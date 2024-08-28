@@ -249,3 +249,7 @@ func (o *macos) parseInstalledPackages(stdout string) (models.Packages, models.S
 
 	return pkgs, nil, nil
 }
+
+func (o *macos) updatePackages([]string) error {
+	return nil
+}
